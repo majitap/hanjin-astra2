@@ -1,0 +1,5 @@
+NanumSquare Neo / NAVER Corporation and Sandoll
+Original unmodified webfont files from https://campaign.naver.com/nanumsquare_neo/download/NaverNanumSquareNeo.zip
+
+NAVER permits personal and commercial use under its open license. The font files must not be sold. All font intellectual property belongs to NAVER.
+Full license and official source: https://campaign.naver.com/nanumsquare_neo/

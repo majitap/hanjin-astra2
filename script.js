@@ -1,59 +1,141 @@
 'use strict';
+const header = document.querySelector('.site-header');
+const hero = document.querySelector('.hero');
 const menuToggle = document.querySelector('.menu-toggle');
 const mobileNav = document.querySelector('#mobile-nav');
+const main = document.querySelector('main');
+const footer = document.querySelector('footer');
 function closeMenu() {
   menuToggle.setAttribute('aria-expanded', 'false');
   menuToggle.setAttribute('aria-label', '메뉴 열기');
   mobileNav.hidden = true;
+  document.body.classList.remove('menu-open');
+  main.inert = false; footer.inert = false;
 }
 menuToggle.addEventListener('click', () => {
-  const open = menuToggle.getAttribute('aria-expanded') !== 'true';
-  menuToggle.setAttribute('aria-expanded', String(open));
-  menuToggle.setAttribute('aria-label', open ? '메뉴 닫기' : '메뉴 열기');
-  mobileNav.hidden = !open;
+  if (menuToggle.getAttribute('aria-expanded') === 'true') { closeMenu(); return; }
+  menuToggle.setAttribute('aria-expanded', 'true');
+  menuToggle.setAttribute('aria-label', '메뉴 닫기');
+  mobileNav.hidden = false;
+  document.body.classList.add('menu-open');
+  main.inert = true; footer.inert = true;
+  mobileNav.querySelector('a').focus();
 });
 mobileNav.querySelectorAll('a').forEach(link => link.addEventListener('click', closeMenu));
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && !mobileNav.hidden) {
-    closeMenu(); menuToggle.focus();
+  if (mobileNav.hidden) return;
+  if (event.key === 'Escape') { closeMenu(); menuToggle.focus(); }
+  if (event.key === 'Tab') {
+    const focusable = [menuToggle, ...mobileNav.querySelectorAll('a,button')];
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 });
-window.matchMedia('(min-width: 861px)').addEventListener('change', event => {
-  if (event.matches) closeMenu();
-});
-const video = document.querySelector('.hero-video');
-const videoToggle = document.querySelector('.video-toggle');
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-let manuallyPaused = false;
-function setVideoState(playing) {
-  videoToggle.setAttribute('aria-label', playing ? '배경 영상 일시정지' : '배경 영상 재생');
-  videoToggle.querySelector('.video-state').textContent = playing ? '일시정지' : '재생';
-  videoToggle.querySelector('path').setAttribute('d', playing ? 'M8 5v14M16 5v14' : 'm8 5 11 7-11 7Z');
+const scenes = [...document.querySelectorAll('.hero-scene')];
+const motionToggle = document.querySelector('.motion-toggle');
+const nextScene = document.querySelector('.scene-next');
+const sceneProgress = document.querySelector('.scene-track > span');
+let sceneIndex = 0, sceneTimer;
+let motionPaused = reducedMotion.matches;
+let heroVisible = true;
+const sceneDuration = 8000;
+function scheduleScene() {
+  clearTimeout(sceneTimer);
+  if (!motionPaused && !document.hidden && heroVisible) sceneTimer = setTimeout(() => showScene(sceneIndex + 1), sceneDuration);
 }
-video.addEventListener('play', () => setVideoState(true));
-video.addEventListener('pause', () => setVideoState(false));
-async function playVideo() { try { await video.play(); } catch { setVideoState(false); } }
-videoToggle.addEventListener('click', () => {
-  if (video.paused) { manuallyPaused = false; playVideo(); }
-  else { manuallyPaused = true; video.pause(); }
-});
-if (!reducedMotion.matches) playVideo();
-reducedMotion.addEventListener('change', event => { if(event.matches) video.pause(); });
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) video.pause();
-  else if (!manuallyPaused && !reducedMotion.matches) playVideo();
-});
+function updateMotion() {
+  document.body.classList.toggle('motion-paused', motionPaused || document.hidden || !heroVisible);
+  motionToggle.setAttribute('aria-label', motionPaused ? '배경 움직임 재생' : '배경 움직임 일시정지');
+  motionToggle.setAttribute('aria-pressed', String(motionPaused));
+  motionToggle.querySelector('path').setAttribute('d', motionPaused ? 'm8 5 11 7-11 7Z' : 'M8 5v14M16 5v14');
+  scheduleScene();
+}
+function showScene(index) {
+  sceneIndex = (index + scenes.length) % scenes.length;
+  scenes.forEach((scene, i) => scene.classList.toggle('is-active', i === sceneIndex));
+  document.querySelector('.scene-current').textContent = String(sceneIndex + 1).padStart(2,'0');
+  sceneProgress.style.animation = 'none';
+  void sceneProgress.offsetWidth;
+  sceneProgress.style.animation = '';
+  scheduleScene();
+}
+nextScene.addEventListener('click', () => showScene(sceneIndex + 1));
+motionToggle.addEventListener('click', () => { motionPaused = !motionPaused; updateMotion(); });
+reducedMotion.addEventListener('change', event => { motionPaused = event.matches; updateMotion(); });
+document.addEventListener('visibilitychange', updateMotion);
+new IntersectionObserver(entries => { heroVisible = entries[0].isIntersecting; updateMotion(); }, {threshold:0}).observe(hero);
+updateMotion();
+const floating = document.querySelector('.floating-contact');
+let ticking = false;
+function updateScroll() {
+  const y = window.scrollY;
+  header.classList.toggle('is-solid', y > 72);
+  const floatingVisible = y > hero.offsetHeight * .8;
+  floating.classList.toggle('visible', floatingVisible);
+  floating.tabIndex = floatingVisible ? 0 : -1;
+  floating.setAttribute('aria-hidden', String(!floatingVisible));
+  if (!reducedMotion.matches && y < hero.offsetHeight) document.querySelector('.hero-scenes').style.transform = `translate3d(0,${Math.min(y * .15,140)}px,0)`;
+  ticking = false;
+}
+window.addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(updateScroll); } }, {passive:true});
+window.addEventListener('resize', updateScroll);
+updateScroll();
 const navLinks = [...document.querySelectorAll('.main-nav a')];
 const sectionObserver = new IntersectionObserver(entries => {
   entries.forEach(entry => {
     if (!entry.isIntersecting) return;
     navLinks.forEach(link => {
-      if (link.hash === `#${entry.target.id}`) link.setAttribute('aria-current', 'location');
+      if (link.hash === `#${entry.target.id}`) link.setAttribute('aria-current','location');
       else link.removeAttribute('aria-current');
     });
   });
-}, { rootMargin: '-20% 0px -55% 0px' });
-document.querySelectorAll('main > section').forEach(section => sectionObserver.observe(section));
+}, {rootMargin:'-20% 0px -50% 0px'});
+document.querySelectorAll('main>section[id]').forEach(section => sectionObserver.observe(section));
+const revealObserver = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    entry.target.classList.add('is-visible');
+    revealObserver.unobserve(entry.target);
+  });
+}, {threshold:.08});
+document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+if (!reducedMotion.matches) document.documentElement.classList.add('js');
+const counterObserver = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    const el=entry.target, target=Number(el.dataset.count);
+    if (!reducedMotion.matches) {
+      const start=performance.now();
+      function tick(time) { const progress=Math.min((time-start)/1200,1);el.textContent=String(Math.round(target*(1-Math.pow(1-progress,3))));if(progress<1)requestAnimationFrame(tick); }
+      requestAnimationFrame(tick);
+    }
+    counterObserver.unobserve(el);
+  });
+}, {threshold:.5});
+document.querySelectorAll('[data-count]').forEach(el => counterObserver.observe(el));
+const tabs=[...document.querySelectorAll('[role="tab"]')];
+function selectServiceTab(index, focus = false) {
+  tabs.forEach((tab,i) => {
+    const selected=i===index;
+    tab.setAttribute('aria-selected',String(selected));
+    tab.tabIndex=selected?0:-1;
+    document.getElementById(tab.getAttribute('aria-controls')).hidden=!selected;
+  });
+  if(focus)tabs[index].focus();
+}
+tabs.forEach((tab,i)=>{
+  tab.addEventListener('click',()=>selectServiceTab(i));
+  tab.addEventListener('keydown',event=>{
+    let index;
+    if(event.key==='ArrowRight')index=(i+1)%tabs.length;
+    if(event.key==='ArrowLeft')index=(i-1+tabs.length)%tabs.length;
+    if(event.key==='Home')index=0;
+    if(event.key==='End')index=tabs.length-1;
+    if(index!==undefined){event.preventDefault();selectServiceTab(index,true);}
+  });
+});
 
 const dialog = document.querySelector('#inquiry-dialog');
 const form = document.querySelector('#inquiry-form');
